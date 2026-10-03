@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ inv.id }}{% endblock %}
+{% block content %}
+<h1>Invoice {{ inv.id }}</h1>
+<table>
+  <tbody>
+    <tr><th>Vendor</th><td>{{ vendor.name }}</td></tr>
+    <tr><th>Invoice number</th><td>{{ inv.id }}</td></tr>
+    <tr><th>Issue date</th><td>{{ inv.issue_date | portal_date }}</td></tr>
+    <tr><th>Due date</th><td>{{ inv.due_date | portal_date }}</td></tr>
+    <tr><th>Amount</th><td>{{ inv.currency }} {{ inv.amount | money }}</td></tr>
+    <tr><th>Status</th><td>{{ inv.status }}</td></tr>
+  </tbody>
+</table>
+<h2>Line items</h2>
+<table>
+  <thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead>
+  <tbody>
+  {% for li in inv.line_items %}
+    <tr><td>{{ li.description }}</td><td>{{ li.qty }}</td><td>{{ li.unit_price | money }}</td><td>{{ (li.qty * li.unit_price) | money }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="/portal/invoice/{{ inv.id }}/pdf">Download PDF</a></p>
+<p><a href="/portal/invoices?company={{ vendor.name | urlencode }}">Back to invoices for {{ vendor.name }}</a></p>
+{% endblock %}

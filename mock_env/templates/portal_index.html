@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Vendor portal{% endblock %}
+{% block content %}
+<h1>Vendor portal</h1>
+<form method="get" action="/portal">
+  <label for="q">Search vendors</label>
+  <input id="q" name="q" type="text" value="{{ q }}" placeholder="Vendor name">
+  <button type="submit">Search</button>
+</form>
+<h2>Vendors{% if q %} matching "{{ q }}"{% endif %}</h2>
+{% if vendors %}
+<table>
+  <thead><tr><th>Vendor</th><th>Contact email</th><th>Invoices</th></tr></thead>
+  <tbody>
+  {% for v in vendors %}
+    <tr>
+      <td>{{ v.name }}</td>
+      <td>{{ v.email }}</td>
+      <td><a href="/portal/invoices?company={{ v.name | urlencode }}">View invoices for {{ v.name }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No vendors found.</p>
+{% endif %}
+{% endblock %}

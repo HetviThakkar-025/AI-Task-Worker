@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+reportlab
+playwright
+pytest
+httpx
+python-dotenv
+pypdf
+google-genai

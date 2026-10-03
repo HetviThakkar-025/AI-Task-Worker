@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Company Environment{% endblock %}</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; color: #222; }
+  nav { border-bottom: 1px solid #ccc; padding-bottom: 8px; margin-bottom: 16px; }
+  nav a { margin-right: 16px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+  th { background: #f3f3f3; }
+  label { display: block; margin-top: 12px; font-weight: 600; }
+  input, select { padding: 6px; min-width: 260px; }
+  button { margin-top: 16px; padding: 8px 16px; }
+  .error { background: #fde8e8; color: #9b1c1c; border: 1px solid #f5b5b5; padding: 10px; margin: 12px 0; }
+  .muted { color: #666; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">Home</a>
+  <a href="/portal">Vendor portal</a>
+  <a href="/finance/bills">Finance: Bills</a>
+  <a href="/finance/bills/new">Finance: New bill</a>
+  <a href="/finance/vendors/new">Finance: New vendor</a>
+</nav>
+{% block content %}{% endblock %}
+</body>
+</html>

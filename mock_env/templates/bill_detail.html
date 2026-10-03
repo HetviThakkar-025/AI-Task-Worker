@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Bill {{ bill.id }}{% endblock %}
+{% block content %}
+<h1>Bill {{ bill.id }}</h1>
+<table>
+  <tbody>
+    <tr><th>Vendor</th><td>{{ bill.vendor }}</td></tr>
+    <tr><th>Invoice number</th><td>{{ bill.invoice_number }}</td></tr>
+    <tr><th>Amount</th><td>{{ bill.amount | money }}</td></tr>
+    <tr><th>Due date</th><td>{{ bill.due_date }}</td></tr>
+    <tr><th>Status</th><td>{{ bill.status }}</td></tr>
+  </tbody>
+</table>
+{% if bill.status != "Paid" %}
+<form method="post" action="/finance/bills/{{ bill.id }}/pay">
+  <button type="submit">Mark as paid</button>
+</form>
+{% endif %}
+<p><a href="/finance/bills">Back to bills</a></p>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Finance - New bill{% endblock %}
+{% block content %}
+<h1>New bill</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/finance/bills">
+  <label for="vendor_id">Vendor</label>
+  <select id="vendor_id" name="vendor_id">
+    <option value="">-- Select vendor --</option>
+    {% for v in vendors %}
+    <option value="{{ v.id }}" {% if form.vendor_id == v.id %}selected{% endif %}>{{ v.name }}</option>
+    {% endfor %}
+  </select>
+  <label for="invoice_number">Invoice number</label>
+  <input id="invoice_number" name="invoice_number" type="text" value="{{ form.invoice_number }}">
+  <label for="amount">Amount</label>
+  <input id="amount" name="amount" type="number" step="0.01" value="{{ form.amount }}">
+  <label for="due_date">Due date (YYYY-MM-DD)</label>
+  <input id="due_date" name="due_date" type="text" value="{{ form.due_date }}" placeholder="YYYY-MM-DD">
+  <div><button type="submit">Save</button></div>
+</form>
+<p class="muted">Vendor missing? <a href="/finance/vendors/new">Create vendor</a></p>
+{% endblock %}

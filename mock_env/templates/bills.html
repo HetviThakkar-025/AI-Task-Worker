@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Finance - Bills{% endblock %}
+{% block content %}
+<h1>Bills</h1>
+<p><a href="/finance/bills/new">New bill</a></p>
+{% if bills %}
+<table>
+  <thead><tr><th>Vendor</th><th>Invoice number</th><th>Amount</th><th>Due date</th><th>Status</th><th>Details</th></tr></thead>
+  <tbody>
+  {% for b in bills %}
+    <tr>
+      <td>{{ b.vendor }}</td>
+      <td>{{ b.invoice_number }}</td>
+      <td>{{ b.amount | money }}</td>
+      <td>{{ b.due_date }}</td>
+      <td>{{ b.status }}</td>
+      <td><a href="/finance/bills/{{ b.id }}">View bill {{ b.id }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No bills entered yet.</p>
+{% endif %}
+{% endblock %}

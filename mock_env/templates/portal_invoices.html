@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Invoices - {{ vendor.name }}{% endblock %}
+{% block content %}
+<h1>Invoices for {{ vendor.name }}</h1>
+<p class="muted">Dates are shown as DD/MM/YYYY.</p>
+<table>
+  <thead><tr><th>Invoice ID</th><th>Issue date</th><th>Amount</th><th>Due date</th><th>Status</th><th>Details</th></tr></thead>
+  <tbody>
+  {% for inv in invoices %}
+    <tr>
+      <td>{{ inv.id }}</td>
+      <td>{{ inv.issue_date | portal_date }}</td>
+      <td>{{ inv.currency }} {{ inv.amount | money }}</td>
+      <td>{{ inv.due_date | portal_date }}</td>
+      <td>{{ inv.status }}</td>
+      <td><a href="/portal/invoice/{{ inv.id }}">View invoice {{ inv.id }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="/portal">Back to vendor list</a></p>
+{% endblock %}
