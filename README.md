@@ -64,14 +64,14 @@ To start the mock app manually: `python -m uvicorn mock_env.app:app --port 8000`
 
 ## Example tasks
 
-Results from live runs during development. The main-task run used the final code. The vendor-creation and "enter all / pay oldest" runs came just before the last two fixes: tolerant JSON parsing in the verifier, and the exact-name prompt rule. The `--flaky`, Acme and ambiguous-name runs used earlier prompt versions (see Known limitations).
+Results from live runs during development. The main-task and ambiguous-name runs used the final code. The vendor-creation and "enter all / pay oldest" runs came just before the last two fixes: tolerant JSON parsing in the verifier, and the exact-name prompt rule. Only the `--flaky` and Acme runs used earlier prompt versions (see Known limitations).
 
 | Command | What it shows | Result |
 |---|---|---|
 | `python main.py "Find the latest invoice from Company X, extract the amount and due date, enter it into the finance system, and tell me when it is done."` | Main task: choose the right vendor and the newest invoice, convert DD/MM/YYYY to YYYY-MM-DD and `4,700.50` to `4700.50` | `done`, verified (10 steps) |
 | same task with `--flaky` | First save returns HTTP 503; agent re-enters the form and retries | `done`, verified, no duplicate bill |
 | `python main.py "Find the latest invoice from Acme Supplies, enter it into the finance system, and tell me when it is done."` | Amount 124,050 is above the approval threshold. Answer `n`: agent stops with `failed`, nothing saved. Answer `y`: bill saved | `failed` / `done` |
-| `python main.py "Find the latest invoice from Company and enter it into the finance system."` | Ambiguous name ("Company X" vs "Company X Ltd"): agent asks the user | asks, then `done` after answer "Company X" |
+| `python main.py "Find the latest invoice from Company and enter it into the finance system."` | Ambiguous name ("Company X" vs "Company X Ltd"): agent asks the user | asks, then `done` after answer "Company X" (re-run with the final code and prompts, 15 steps) |
 | `python main.py "Create a new vendor called Globex Corp in the finance system."` | Different workflow, no code changes | `done`, verified (7 steps) |
 | `python main.py "Enter all invoices from Company X Ltd into the finance system, then mark the oldest one as paid."` | Multi-record task plus an irreversible action ("Mark as paid" requires approval) | `done`, verified (26 steps) |
 
@@ -176,7 +176,7 @@ flowchart TD
 
 - **Same-model verifier.** The verifier is a separate prompt on the same model family, so it can share the worker's blind spots. Its judgement is grounded in harness-fetched data, but it is still an LLM judgement.
 - **Timeout is not a hard kill.** The 15s tool timeout uses Playwright's per-operation timeouts, and retries stop once 15s have passed. With the sync API, a stuck call cannot be interrupted from outside.
-- **Free-tier quota.** The Gemini free tier allows about 20 requests per day per model, and one run uses 10 to 26 requests. Live testing needed several models and the fallback chain. Some runs used a lite model, and quota cut short one late re-check of the ambiguous-name task with the final prompt wording.
+- **Free-tier quota.** The Gemini free tier allows about 20 requests per day per model, and one run uses 10 to 26 requests. Live testing needed several models and the fallback chain. Some runs used a lite model.
 - **Single mock environment.** Only one small site has been tested. There is no login, captcha, file upload, iframe, pop-up window or multi-tab flow.
 - **No long-term memory.** Memory lasts for one run only.
 - **Prompts changed during development.** Some earlier runs (the `--flaky` and approval scenarios) were done with earlier versions of the system prompt. The prompt was later tightened (approval threshold in the prompt, no approval requests for routine actions, exact-name matching), and those scenarios were not all re-run with the final wording.
