@@ -2,7 +2,13 @@
 
 ## Overview
 
-AI Task Worker is a prototype of an autonomous agent that takes a natural-language task ("Find the latest invoice from Company X and enter it into the finance system") and completes it by operating a real browser (Playwright/Chromium) against a mock company environment: a vendor portal and an internal finance system. An LLM (Gemini) decides one action per turn from a text rendering of the page; the harness executes it, guards risky actions behind human approval, recovers from errors, and, when the agent claims it is done, independently checks the real system state before reporting success. Every run produces a trace, screenshots and a Markdown report.
+AI Task Worker is a prototype agent. You give it a task in plain English, for example "Find the latest invoice from Company X and enter it into the finance system". It then does the task in a real browser (Playwright/Chromium) on a mock company environment. The environment has a vendor portal and an internal finance system.
+
+At each turn, an LLM (Gemini) reads a text version of the page and picks one action. The harness runs that action. It asks a human for approval before risky actions and recovers from errors. When the agent says it is done, the harness checks the real system state itself before it reports success. Every run saves a trace, screenshots and a Markdown report.
+
+## About this submission
+
+I built this prototype for the CentrAlign AI intern task on 3-4 October 2026. I used Claude (chat and Claude Code) heavily. Claude proposed the architecture and wrote most of the code. I worked through the build one stage at a time: I ran each stage, checked the output, fixed problems on my machine (WSL libraries, API key and free-tier quota), and re-ran the tasks before submitting. I am not presenting the design as my own invention. I am going through the code and the design decisions module by module so I can explain, debug and extend the system in the technical discussion.
 
 ## Demo
 
@@ -64,7 +70,7 @@ To start the mock app manually: `python -m uvicorn mock_env.app:app --port 8000`
 
 ## Example tasks
 
-Results from live runs during development. The main-task and ambiguous-name runs used the final code. The vendor-creation and "enter all / pay oldest" runs came just before the last two fixes: tolerant JSON parsing in the verifier, and the exact-name prompt rule. Only the `--flaky` and Acme runs used earlier prompt versions (see Known limitations).
+These are results from live runs during development. The main-task and ambiguous-name runs used the final code. The vendor-creation and "enter all / pay oldest" runs happened just before the last two fixes: tolerant JSON parsing in the verifier, and the exact-name prompt rule. Only the `--flaky` and Acme runs used earlier prompt versions (see Known limitations).
 
 | Command | What it shows | Result |
 |---|---|---|
@@ -118,15 +124,15 @@ flowchart TD
 
 ## Key design decisions
 
-- **Text page state instead of screenshots.** The browser layer gives the model the URL, title, visible errors, a compact text version of the page (table rows kept as `a | b | c`) and a numbered list of interactive elements. The numbers are written into the DOM (`data-agent-id`), so actions address elements exactly. This is cheap, deterministic and easy to debug from logs. The trade-off is that it fails on canvas-heavy or visually encoded pages.
-- **One tool call per turn.** Function calling is forced (`mode=ANY`), and every action returns the fresh page state. The model always decides from what actually happened, never from a plan written several steps earlier.
-- **Errors are observations.** Tool failures, app validation errors and denials come back as text such as `ERROR: Element 12 not found; call get_state, ids change after navigation`. The model can read them and adapt, and the loop never crashes on a bad action.
-- **Verification by the harness.** When the agent calls `finish`, the harness itself fetches `/api/bills`, `/api/vendors` and `/api/invoices`; the agent can't influence this snapshot. A separate verifier prompt compares every value with the source data. A failed verification goes back to the agent once; a second failure ends the run as `unverified`.
-- **Approval guard before execution, task-agnostic.** `policy.check` runs before any browser action. It requires approval for clicks whose label means payment, deletion, cancellation or sending, and for Save/Submit/Create when an amount field is at or above `APPROVAL_THRESHOLD`. The model can also call `request_approval` itself; a granted approval covers the next guarded action. After a denial the human is not asked again for the same task.
-- **Provider-neutral messages and a fallback chain.** The loop uses a simple `{role, content, tool_name, tool_args, meta}` format. Only `llm.py` knows Gemini; `meta` carries Gemini 3 thought signatures back unchanged. On quota exhaustion or repeated 503s, `llm.py` moves to the next model in `GEMINI_FALLBACK_MODELS` and prints that it did so. Server-suggested waits longer than 90s are not slept through.
-- **History trimming plus memory.** The last 6 tool results are kept in full and older ones are cut to 300 characters. Facts the agent saved with `remember` are re-injected every turn, so trimming does not lose them.
-- **Reliability.** Transient browser errors (timeouts, `net::ERR`, navigation failures) are retried with backoff, but validation errors are not. A loop detector warns on 3 identical actions or A-B-A-B-A-B alternation; 3 warnings in a row stop the run.
-- **Deliberate traps in the mock environment**, each testing one capability:
+- **Text page state instead of screenshots.** The model does not see screenshots. The browser layer gives it the URL, the title, visible errors, a short text version of the page (table rows kept as `a | b | c`) and a numbered list of interactive elements. The numbers are written into the DOM (`data-agent-id`), so each action points at exactly one element. This is cheap, deterministic and easy to debug from logs. The downside is that it fails on canvas-heavy or visually encoded pages.
+- **One tool call per turn.** Function calling is forced (`mode=ANY`). Every action returns the fresh page state. So the model always decides from what actually happened, and never from a plan it wrote several steps earlier.
+- **Errors are observations.** Tool failures, app validation errors and denials come back to the model as text, for example `ERROR: Element 12 not found; call get_state, ids change after navigation`. The model can read them and try something else. A bad action never crashes the loop.
+- **The harness does the verification.** When the agent calls `finish`, the harness fetches `/api/bills`, `/api/vendors` and `/api/invoices` itself. The agent cannot change this snapshot. A separate verifier prompt then compares every value with the source data. If verification fails, the agent gets it back once. If it fails a second time, the run ends as `unverified`.
+- **Task-agnostic approval check before execution.** `policy.check` runs before every browser action. It asks for approval on clicks whose label means payment, deletion, cancellation or sending. It also asks for approval on Save/Submit/Create when an amount field is at or above `APPROVAL_THRESHOLD`. The model can call `request_approval` itself too. A granted approval covers the next guarded action. After a denial, the human is not asked again for the same task.
+- **Provider-neutral messages and a fallback chain.** The loop uses a simple message format: `{role, content, tool_name, tool_args, meta}`. Only `llm.py` knows about Gemini. The `meta` field carries Gemini 3 thought signatures back unchanged. When quota runs out or there are repeated 503s, `llm.py` moves to the next model in `GEMINI_FALLBACK_MODELS` and prints that it did so. If the server suggests a wait longer than 90s, it does not sleep through it.
+- **History trimming plus memory.** The last 6 tool results stay in full. Older ones are cut to 300 characters. Facts the agent saved with `remember` are added back into every turn, so trimming does not lose them.
+- **Reliability.** Transient browser errors (timeouts, `net::ERR`, navigation failures) are retried with backoff. Validation errors are not retried. A loop detector warns on 3 identical actions or on A-B-A-B-A-B alternation. 3 warnings in a row stop the run.
+- **Deliberate traps in the mock environment.** Each trap tests one capability:
 
 | Trap | Tests |
 |---|---|
@@ -152,11 +158,11 @@ flowchart TD
 
 ## Assumptions
 
-- The worker operates websites the way a person would, through the UI. The `/api/*` endpoints are read-only ground truth used only by the verifier and the harness, never by the agent.
-- "Latest" means the most recent issue date. A bill is "entered" when it exists in the finance system with the correct vendor, invoice number, amount and due date.
-- Payments, deletions, sends and high-value submissions are irreversible enough to need a human. Ordinary form saves below the threshold are not.
-- A human operator is available on the terminal for questions and approvals. With no input (EOF), approvals count as denied and questions end the run with status `asked_user`.
-- One task per run; state does not persist between runs.
+- The worker uses websites the way a person would, through the UI. The `/api/*` endpoints are read-only ground truth. Only the verifier and the harness use them. The agent never does.
+- "Latest" means the most recent issue date. A bill counts as "entered" when it exists in the finance system with the correct vendor, invoice number, amount and due date.
+- Payments, deletions, sends and high-value submissions are irreversible enough to need a human. Normal form saves below the threshold are not.
+- A human operator is at the terminal for questions and approvals. If there is no input (EOF), approvals count as denied, and a question ends the run with status `asked_user`.
+- One task per run. State does not carry over between runs.
 - The base URL and starting paths are environment configuration (`START_PATHS` in `.env`), not task logic.
 
 ## Evaluation mapping
@@ -174,34 +180,35 @@ flowchart TD
 
 ## Known limitations
 
-- **Same-model verifier.** The verifier is a separate prompt on the same model family, so it can share the worker's blind spots. Its judgement is grounded in harness-fetched data, but it is still an LLM judgement.
-- **Timeout is not a hard kill.** The 15s tool timeout uses Playwright's per-operation timeouts, and retries stop once 15s have passed. With the sync API, a stuck call cannot be interrupted from outside.
-- **Free-tier quota.** The Gemini free tier allows about 20 requests per day per model, and one run uses 10 to 26 requests. Live testing needed several models and the fallback chain. Some runs used a lite model.
-- **Single mock environment.** Only one small site has been tested. There is no login, captcha, file upload, iframe, pop-up window or multi-tab flow.
-- **No long-term memory.** Memory lasts for one run only.
-- **Prompts changed during development.** Some earlier runs (the `--flaky` and approval scenarios) were done with earlier versions of the system prompt. The prompt was later tightened (approval threshold in the prompt, no approval requests for routine actions, exact-name matching), and those scenarios were not all re-run with the final wording.
-- **Few tasks tested.** About eight distinct live scenarios, with no success-rate measurement over repeated runs.
-- **Gemini 3 thought signatures** are handled in `llm.py` only. A different provider would need its own adapter, although the rest of the code would not change.
-- **Approval rules are label-based.** A button labelled ambiguously (e.g. "Confirm" that actually pays) would not be caught unless the model requests approval itself.
+- **Same-model verifier.** The verifier is a separate prompt, but it uses the same model family as the worker. So it can have the same blind spots. Its judgement is based on data the harness fetched, but it is still an LLM judgement.
+- **Timeout is not a hard kill.** The 15s tool timeout relies on Playwright's per-operation timeouts, and retries stop after 15s. With the sync API, a stuck call cannot be interrupted from outside.
+- **Free-tier quota.** The Gemini free tier allows about 20 requests per day per model. One run uses 10 to 26 requests. So live testing needed several models and the fallback chain. Some runs used a lite model.
+- **Single mock environment.** Only one small site has been tested. It has no login, captcha, file upload, iframe, pop-up window or multi-tab flow.
+- **No long-term memory.** Memory only lasts for one run.
+- **Prompts changed during development.** Some earlier runs (the `--flaky` and approval scenarios) used earlier versions of the system prompt. The prompt was made stricter later (approval threshold in the prompt, no approval requests for routine actions, exact-name matching). Not all of those scenarios were re-run with the final wording.
+- **Few tasks tested.** About eight different live scenarios. There is no success-rate measurement over repeated runs.
+- **Gemini 3 thought signatures** are handled only in `llm.py`. A different provider would need its own adapter. The rest of the code would not change.
+- **Approval rules are based on labels.** If a button has an unclear label (for example "Confirm" that actually pays), the policy would not catch it unless the model asks for approval itself.
 - **Noisy screenshot trigger.** The "left a form" trigger also fires on pages that only have a search box.
+- **Tested on WSL (Ubuntu) only.** The Windows PowerShell and macOS setup steps are written but not tested.
 
 ## Issues found during testing
 
-- **Verifier rejected a correct result.** The verifier model replied `"verified": true` but put a raw newline inside a JSON string, so strict parsing failed and the run was marked unverified. Fixed with tolerant JSON parsing, plus a regression test.
-- **Agent asked about an exact match.** An ambiguity rule in the prompt made the agent call `ask_user` even when the vendor name matched exactly. The rule was rewritten: exact matches are used directly, and only partial matches trigger `ask_user`.
-- **Approval re-requested after a denial.** After the operator denied an action, the agent asked for approval again. Further approval requests in the same task are now refused without asking the operator.
-- **Loop warnings ignored.** The agent received 10 loop warnings in a row and kept going. The run now stops after 3 consecutive warnings.
-- **Quota exhausted mid-testing.** The Gemini free-tier daily quota ran out during testing, and the server-suggested retry delay would have slept for hours. Added a 90s cap on retry waits and a model fallback chain (`GEMINI_FALLBACK_MODELS`).
-- **Gemini 3 thought signatures.** Gemini 3 models require thought signatures from earlier turns to be passed back. These are carried in an opaque `meta` field on each message and handled only in `llm.py`.
+- **Verifier rejected a correct result.** The verifier model replied `"verified": true`, but it put a raw newline inside a JSON string. Strict parsing failed, so the run was marked unverified. Fix: tolerant JSON parsing, plus a regression test.
+- **Agent asked about an exact match.** A prompt rule about ambiguity made the agent call `ask_user` even when the vendor name matched exactly. Fix: the rule was rewritten. Exact matches are now used directly, and only partial matches trigger `ask_user`.
+- **Approval asked again after a denial.** After the operator denied an action, the agent asked for approval again. Fix: further approval requests in the same task are now refused without asking the operator.
+- **Loop warnings ignored.** The agent got 10 loop warnings in a row and kept going. Fix: the run now stops after 3 warnings in a row.
+- **Quota ran out mid-testing.** The Gemini free-tier daily quota ran out during testing. The retry delay the server suggested would have slept for hours. Fix: a 90s cap on retry waits, and a model fallback chain (`GEMINI_FALLBACK_MODELS`).
+- **Gemini 3 thought signatures.** Gemini 3 models need thought signatures from earlier turns to be passed back. They are carried in an opaque `meta` field on each message and handled only in `llm.py`.
 
 ## What I would build next
 
-1. **Evaluation suite:** scripted scenarios (traps, chaos, approvals, ambiguity) run N times each, with success rate, steps, cost and verifier agreement tracked per commit.
-2. **Independent verifier:** a different model or vendor for verification, plus deterministic checks where the expected state can be computed.
-3. **Resumable runs:** checkpoints of memory, history and browser state, so a run can pause for approval and resume later.
+1. **Evaluation suite:** scripted scenarios (traps, chaos, approvals, ambiguity), each run N times. Track success rate, steps, cost and verifier agreement for every commit.
+2. **Independent verifier:** use a different model or vendor for verification. Add deterministic checks where the expected state can be computed.
+3. **Resumable runs:** save checkpoints of memory, history and browser state, so a run can pause for approval and continue later.
 4. **Richer permissions:** per-tool and per-site policies, allow/deny lists, budget limits, and approval through Slack or email instead of stdin.
-5. **DOM and vision hybrid:** fall back to screenshots and coordinates on pages the text state cannot represent.
-6. **Long-term memory:** learned facts about each site (where things are, required formats) reused across runs.
+5. **DOM and vision hybrid:** fall back to screenshots and coordinates on pages that the text state cannot show.
+6. **Long-term memory:** remember facts about each site (where things are, required formats) and reuse them across runs.
 7. **Parallel workers** with a task queue, and real integrations (email, ERP APIs) behind the same tool interface.
 
 ## Safety note
