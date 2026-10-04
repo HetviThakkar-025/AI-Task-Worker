@@ -12,7 +12,7 @@ I built this prototype for the CentrAlign AI intern task on 3-4 October 2026. I 
 
 ## Demo
 
-Demo video: <ADD LINK>
+Demo video: https://drive.google.com/file/d/16A9EmyTHeILSfit2KhQM2s-_34p6GqQy/view?usp=drive_link (about 4 minutes, one full run of the main task with the browser visible)
 
 An example run (report and screenshots) is committed in [`examples/run_task1/`](examples/run_task1/report.md).
 
