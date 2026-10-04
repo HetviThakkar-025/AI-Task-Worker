@@ -14,12 +14,26 @@ An example run (report and screenshots) is committed in [`examples/run_task1/`](
 
 Requires Python 3.11.
 
+Linux / macOS / WSL:
+
 ```bash
-git clone <repo-url> ai-task-worker && cd ai-task-worker
+git clone https://github.com/HetviThakkar-025/AI-Task-Worker.git && cd AI-Task-Worker
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 cp .env.example .env        # then put your GEMINI_API_KEY in .env
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/HetviThakkar-025/AI-Task-Worker.git
+cd AI-Task-Worker
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+playwright install chromium
+copy .env.example .env      # then put your GEMINI_API_KEY in .env
 ```
 
 **Linux / WSL: Chromium system libraries.** If Chromium fails with `error while loading shared libraries: libnspr4.so` (or `libnss3`, `libasound`), install them once:
@@ -143,6 +157,7 @@ flowchart TD
 - Payments, deletions, sends and high-value submissions are irreversible enough to need a human. Ordinary form saves below the threshold are not.
 - A human operator is available on the terminal for questions and approvals. With no input (EOF), approvals count as denied and questions end the run with status `asked_user`.
 - One task per run; state does not persist between runs.
+- The base URL and starting paths are environment configuration (`START_PATHS` in `.env`), not task logic.
 
 ## Evaluation mapping
 
@@ -169,6 +184,15 @@ flowchart TD
 - **Gemini 3 thought signatures** are handled in `llm.py` only. A different provider would need its own adapter, although the rest of the code would not change.
 - **Approval rules are label-based.** A button labelled ambiguously (e.g. "Confirm" that actually pays) would not be caught unless the model requests approval itself.
 - **Noisy screenshot trigger.** The "left a form" trigger also fires on pages that only have a search box.
+
+## Issues found during testing
+
+- **Verifier rejected a correct result.** The verifier model replied `"verified": true` but put a raw newline inside a JSON string, so strict parsing failed and the run was marked unverified. Fixed with tolerant JSON parsing, plus a regression test.
+- **Agent asked about an exact match.** An ambiguity rule in the prompt made the agent call `ask_user` even when the vendor name matched exactly. The rule was rewritten: exact matches are used directly, and only partial matches trigger `ask_user`.
+- **Approval re-requested after a denial.** After the operator denied an action, the agent asked for approval again. Further approval requests in the same task are now refused without asking the operator.
+- **Loop warnings ignored.** The agent received 10 loop warnings in a row and kept going. The run now stops after 3 consecutive warnings.
+- **Quota exhausted mid-testing.** The Gemini free-tier daily quota ran out during testing, and the server-suggested retry delay would have slept for hours. Added a 90s cap on retry waits and a model fallback chain (`GEMINI_FALLBACK_MODELS`).
+- **Gemini 3 thought signatures.** Gemini 3 models require thought signatures from earlier turns to be passed back. These are carried in an opaque `meta` field on each message and handled only in `llm.py`.
 
 ## What I would build next
 

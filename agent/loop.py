@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Callable
 
@@ -94,12 +95,14 @@ class Agent:
 
     # ------------------------------------------------------------ prompting --
     def _task_message(self) -> dict:
+        paths = [p.strip() for p in os.getenv("START_PATHS", "/portal,/finance").split(",") if p.strip()]
+        starts = " and ".join([", ".join(paths[:-1]), paths[-1]] if len(paths) > 1 else paths)
         return {
             "role": "user",
             "content": (
                 f"Task: {self.task}\n\n"
                 f"Environment base URL: {self.base_url}\n"
-                "Starting points: /portal and /finance"
+                f"Starting points: {starts}"
             ),
         }
 
